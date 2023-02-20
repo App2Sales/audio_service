@@ -70,11 +70,14 @@ public class AudioServicePlugin implements FlutterPlugin, ActivityAware {
         if (flutterEngine == null) {
             // XXX: The constructor triggers onAttachedToEngine so this variable doesn't help us.
             // Maybe need a boolean flag to tell us we're currently loading the main flutter engine.
-            flutterEngine = new FlutterEngine(context.getApplicationContext());
             String initialRoute = null;
+            String[] args = new String[]{};
+
             if (context instanceof FlutterActivity) {
                 final FlutterActivity activity = (FlutterActivity)context;
                 initialRoute = activity.getInitialRoute();
+                args = activity.getFlutterShellArgs().toArray();
+
                 if (initialRoute == null) {
                     if (activity.shouldHandleDeeplinking()) {
                         Uri data = activity.getIntent().getData();
@@ -87,9 +90,12 @@ public class AudioServicePlugin implements FlutterPlugin, ActivityAware {
                     }
                 }
             }
+            
             if (initialRoute == null) {
                 initialRoute = "/";
             }
+
+            flutterEngine = new FlutterEngine(context.getApplicationContext(), args);
             flutterEngine.getNavigationChannel().setInitialRoute(initialRoute);
             flutterEngine.getDartExecutor().executeDartEntrypoint(DartExecutor.DartEntrypoint.createDefault());
             FlutterEngineCache.getInstance().put(flutterEngineId, flutterEngine);
