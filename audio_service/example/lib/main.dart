@@ -18,17 +18,38 @@
 // flutter run
 
 import 'dart:async';
+import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:audio_service/audio_service.dart';
 import 'package:audio_service_example/common.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:rxdart/rxdart.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'dart:convert';
+
+import 'package:convert/convert.dart';
+import 'package:crypto/crypto.dart';
+import 'package:encrypt/encrypt.dart' as enc;
+import 'package:http/http.dart' as http;
 
 // You might want to provide this using dependency injection rather than a
 // global variable.
 late AudioHandler _audioHandler;
+
+class MyEncrypt {
+  // static final myKey = enc.Key.fromSecureRandom(16); //AES-128
+  static final myKey = enc.Key.fromUtf8("chavededezesseis"); //AES-128
+  static final myIV = enc.IV.fromUtf8("ivdedezesseischr");
+  // static final myEncrypter = enc.Encrypter(enc.AES(myKey));
+  static final myEncrypter =
+      enc.Encrypter(enc.AES(myKey, mode: enc.AESMode.ctr, padding: null));
+}
+
+bool first = true;
 
 Future<void> main() async {
   _audioHandler = await AudioService.init(
@@ -39,7 +60,148 @@ Future<void> main() async {
       androidNotificationOngoing: true,
     ),
   );
+
+  // await Permission.storage.request();
+  // await Permission.accessMediaLocation.request();
+
+  const url =
+      "https://bucket.institutohesed.org.br:9000/appinstituto/hesed/Nov_Suplica_cortada_b607513bd5.mp3";
+
+  const aesUrl =
+      "https://firebasestorage.googleapis.com/v0/b/hesed-cd25b.appspot.com/o/encrypted.mp3%5B1%5D.aes?alt=media";
+
+  // final stream = rootBundle.load("assets/sample.mp3").asStream();
+  // final stream = rootBundle.load("assets/encrypted.mp3.aes").asStream();
+  // final local = await rootBundle.load("assets/sample.mp3");
+
+  // const root = "/storage/emulated/0/MyEncFolder";
+  // await Directory(root).create(recursive: true);
+
+  // final file = File("$root/sample.mp3.aes");
+  // await file.writeAsBytes(encrypt(local.buffer.asUint8List()));
+  // print(file.absolute.toString());
+
+  // return;
+
+  // final stream = rootBundle.load("assets/sample.mp3").asStream();
+
+  // final file = File("$root/sample.mp3.aes");
+  // final stream = file.readAsBytes().asStream();
+
+  int _total = 0, _received = 0;
+
+  final uri = Uri.parse(aesUrl);
+  // final uri = Uri.parse(url);
+  final client = http.Client();
+  final request = http.Request('GET', uri);
+  final response = await client.send(request);
+  final stream = response.stream;
+
+  _total = response.contentLength ?? 0;
+
+
+  final streamController = StreamController<List<int>>();
+  final myCustomSource = MyCustomSource(streamController.stream);
+  // player.setAudioSource(myCustomSource, preload: true);
+
+  // final stream = http.get(uri).asStream();
+
+  // final teste = AccumulatorSink<List<int>>();
+
+  player.setAudioSource(myCustomSource, preload: true);
+
+
+  stream.doOnDone(() {
+    print("finished");
+
+    // final fullDecrypted = teste.events.single;
+    // streamController.add(fullDecrypted);
+    
+    // player.setAudioSource(myCustomSource, preload: true);
+
+    // player.play();
+
+    // // print("[Accumulator] - $fullEncrypted");
+
+
+    // enc.Encrypted en = enc.Encrypted(Uint8List.fromList(fullEncrypted));
+    // final decrypted =
+    //     MyEncrypt.myEncrypter.decryptBytes(en, iv: MyEncrypt.myIV);
+
+    // streamController.add(decrypted);
+
+    // player.setAudioSource(myCustomSource);
+  }).doOnData((event) {
+    _received += event.length;
+
+    print("data: ${event.length}");
+
+    final decrypted = decrypt(event);
+    streamController.add(decrypted);
+
+    print("${(_received/_total)*100}% - ${[_received, _total]}");
+  }).listen((event) {
+
+    // final list = event.buffer.asUint8List();
+    // final list = event.bodyBytes;
+
+    // final encrypted =
+    //     MyEncrypt.myEncrypter.encryptBytes(list, iv: MyEncrypt.myIV).bytes;
+    // final decrypted = decrypt(Uint8List.fromList(event));
+    // final encryptedBytes = base64Decode(event);
+    // final encrypted = encrypt(event.buffer.asUint8List());
+    // final decrypted = decrypt(encrypted);
+    // final decrypted = decrypt(event.buffer.asUint8List());
+    // final decrypted = decrypt(event);
+    // streamController.add(decrypted);
+    // streamController.add(event);
+    // streamController.add(event);
+    // final decrypted = decrypt(list);
+
+    // final encrypted = encrypt(event);
+    // final decrypted = decrypt(encrypted);
+
+    // teste.add(encrypted);
+    // teste.add(decrypted);
+    // bytesHandler(encrypted);
+
+    // print("${(_received/_total)*100}% - ${[_received, _total]}");
+  });
+
+  // var firstChunk = utf8.encode("foo");
+  // var secondChunk = utf8.encode("bar");
+
+  // var output = AccumulatorSink<Digest>();
+
+  // teste.add(firstChunk);
+
+  // var input = sha1.startChunkedConversion(output);
+  // input.add(firstChunk);
+  // input.add(secondChunk); // call `add` for every chunk of input data
+  // input.close();
+  // var digest = output.events.single;
+
+  // print("Digest as bytes: ${digest.bytes}");
+  // print("Digest as hex string: $digest");
+
   runApp(const MyApp());
+}
+
+void bytesHandler(List<int> bytes) {
+  // print("[bytesHandler] -> $bytes");
+}
+
+List<int> encrypt(List<int> bytes) {
+  return MyEncrypt.myEncrypter.encryptBytes(bytes, iv: MyEncrypt.myIV).bytes;
+}
+
+List<int> decrypt(List<int> encryptedBytes) {
+  // enc.Encrypted en = enc.Encrypted(Uint8List.fromList(encryptedBytes));
+  enc.Encrypted en = enc.Encrypted(Uint8List.fromList(encryptedBytes));
+  // final result = MyEncrypt.myEncrypter.decrypt(en, iv: MyEncrypt.myIV);
+  // return utf8.encode(result.toString());
+  // return Uint8List.fromList(result.codeUnits);
+  return MyEncrypt.myEncrypter.decryptBytes(en, iv: MyEncrypt.myIV);
 }
 
 class MyApp extends StatelessWidget {
@@ -152,6 +314,8 @@ class MediaState {
 }
 
 /// An [AudioHandler] for playing a single item.
+final player = AudioPlayer();
+
 class AudioPlayerHandler extends BaseAudioHandler with SeekHandler {
   static final _item = MediaItem(
     id: 'https://s3.amazonaws.com/scifri-episodes/scifri20181123-episode.mp3',
@@ -163,19 +327,17 @@ class AudioPlayerHandler extends BaseAudioHandler with SeekHandler {
         'https://media.wnyc.org/i/1400/1400/l/80/1/ScienceFriday_WNYCStudios_1400.jpg'),
   );
 
-  final _player = AudioPlayer();
-
   /// Initialise our audio handler.
   AudioPlayerHandler() {
     // So that our clients (the Flutter UI and the system notification) know
     // what state to display, here we set up our audio handler to broadcast all
     // playback state changes as they happen via playbackState...
-    _player.playbackEventStream.map(_transformEvent).pipe(playbackState);
+    player.playbackEventStream.map(_transformEvent).pipe(playbackState);
     // ... and also the current media item via mediaItem.
-    mediaItem.add(_item);
+    // mediaItem.add(_item);
 
-    // Load the player.
-    _player.setAudioSource(AudioSource.uri(Uri.parse(_item.id)));
+    // // Load the player.
+    // player.setAudioSource(AudioSource.uri(Uri.parse(_item.id)));
   }
 
   // In this simple example, we handle only 4 actions: play, pause, seek and
@@ -184,16 +346,16 @@ class AudioPlayerHandler extends BaseAudioHandler with SeekHandler {
   // your audio playback logic in one place.
 
   @override
-  Future<void> play() => _player.play();
+  Future<void> play() => player.play();
 
   @override
-  Future<void> pause() => _player.pause();
+  Future<void> pause() => player.pause();
 
   @override
-  Future<void> seek(Duration position) => _player.seek(position);
+  Future<void> seek(Duration position) => player.seek(position);
 
   @override
-  Future<void> stop() => _player.stop();
+  Future<void> stop() => player.stop();
 
   /// Transform a just_audio event into an audio_service state.
   ///
@@ -204,7 +366,7 @@ class AudioPlayerHandler extends BaseAudioHandler with SeekHandler {
     return PlaybackState(
       controls: [
         MediaControl.rewind,
-        if (_player.playing) MediaControl.pause else MediaControl.play,
+        if (player.playing) MediaControl.pause else MediaControl.play,
         MediaControl.stop,
         MediaControl.fastForward,
       ],
@@ -220,12 +382,47 @@ class AudioPlayerHandler extends BaseAudioHandler with SeekHandler {
         ProcessingState.buffering: AudioProcessingState.buffering,
         ProcessingState.ready: AudioProcessingState.ready,
         ProcessingState.completed: AudioProcessingState.completed,
-      }[_player.processingState]!,
-      playing: _player.playing,
-      updatePosition: _player.position,
-      bufferedPosition: _player.bufferedPosition,
-      speed: _player.speed,
+      }[player.processingState]!,
+      playing: player.playing,
+      updatePosition: player.position,
+      bufferedPosition: player.bufferedPosition,
+      speed: player.speed,
       queueIndex: event.currentIndex,
+    );
+  }
+}
+
+class MyCustomSource extends StreamAudioSource {
+  final Stream<List<int>> byteStream;
+  final List<int> bytes = [];
+
+  int iterator = 0;
+
+  MyCustomSource(this.byteStream) {
+    byteStream.listen((data) {
+      // if (iterator == 1) {
+      //   first = false;
+      // }
+      ++iterator;
+      bytes.addAll(data);
+      // if (first) {
+      //   player.play();
+      // }
+      first = false;
+      // print("Times Iteracted: $iterator");
+    });
+  }
+
+  @override
+  Future<StreamAudioResponse> request([int? start, int? end]) async {
+    start ??= 0;
+    end ??= bytes.length;
+    return StreamAudioResponse(
+      sourceLength: bytes.length,
+      contentLength: end - start,
+      offset: start,
+      stream: Stream.value(bytes.sublist(start, end)),
+      contentType: 'audio/mpeg',
     );
   }
 }
