@@ -97,3 +97,6 @@ GeneratedPluginRegistrant.*
 /.vscode/**
 !/.vscode/
 !/.vscode/launch.json
+
+#Fvm
+/audio_service/.fvm*
