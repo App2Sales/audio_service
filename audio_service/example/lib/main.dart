@@ -414,15 +414,16 @@ class MyCustomSource extends StreamAudioSource {
   MyCustomSource({
     required Stream<List<int>> remoteStream,
     this.sourceLength
-  }) {
+  }) {    
     _remoteStream = remoteStream
       .doOnData((bytes) {
         final decrypted = decrypt(bytes);
         _decryptedBytes.addAll(decrypted);
       })
-      .doOnDone(() async {
-        await Future<void>.delayed(const Duration(milliseconds: 3000));
-        _controller.close();
+      .doOnDone(_closeStream)
+      .doOnError((error, stackTrace) async {
+        print(error); print(stackTrace);
+        await _closeStream();
       });
 
     _controller = StreamController<List<int>>.broadcast(
@@ -441,6 +442,11 @@ class MyCustomSource extends StreamAudioSource {
   void _addOnController() {
     _controller.add(_decryptedBytes.sublist(_decryptedStart));
     _decryptedStart = _decryptedBytes.length;
+  }
+
+  Future<void> _closeStream() async {
+    await Future<void>.delayed(const Duration(milliseconds: 3000));
+    _controller.close();
   }
 
   @override
