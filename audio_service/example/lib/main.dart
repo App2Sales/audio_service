@@ -35,6 +35,7 @@ import 'package:convert/convert.dart';
 import 'package:crypto/crypto.dart';
 import 'package:encrypt/encrypt.dart' as enc;
 import 'package:http/http.dart' as http;
+import 'package:pointycastle/export.dart' as pc;
 
 // You might want to provide this using dependency injection rather than a
 // global variable.
@@ -47,6 +48,22 @@ class MyEncrypt {
   // static final myEncrypter = enc.Encrypter(enc.AES(myKey));
   static final myEncrypter =
       enc.Encrypter(enc.AES(myKey, mode: enc.AESMode.ctr, padding: null));
+
+  static final myDecrypter = pc.CTRStreamCipher(pc.AESEngine())
+    ..init(false, pc.ParametersWithIV(
+      pc.KeyParameter(myKey.bytes),
+      myIV.bytes
+    ));  
+
+  static List<int> encrypt(List<int> bytes) {
+    return myEncrypter.encryptBytes(bytes, iv: MyEncrypt.myIV).bytes;
+  }
+
+  static List<int> decrypt(List<int> encryptedBytes) {
+    enc.Encrypted en = enc.Encrypted(Uint8List.fromList(encryptedBytes));      
+    return myDecrypter.process(en.bytes);
+    // return MyEncrypt.myEncrypter.decryptBytes(en, iv: MyEncrypt.myIV);
+  }
 }
 
 bool first = true;
@@ -83,13 +100,6 @@ Future<void> main() async {
 
   // return;
 
-  // final stream = rootBundle.load("assets/sample.mp3").asStream();
-
-  // final file = File("$root/sample.mp3.aes");
-  // final stream = file.readAsBytes().asStream();
-
-  // int _total = 0, _received = 0;
-
   final uri = Uri.parse(aesUrl);
   // final uri = Uri.parse(url);
   final client = http.Client();
@@ -97,116 +107,16 @@ Future<void> main() async {
   final response = await client.send(request);
   final stream = response.stream;
 
-  // _total = response.contentLength ?? 0;
-
-
-  // final accumulator = AccumulatorSink<List<int>>();
-
   final myCustomSource = MyCustomSource(
-    remoteStream: stream,
+    responseStream: stream,
     sourceLength: response.contentLength
   );
 
-  // final streamController = myCustomSource.controller;
-  // player.setAudioSource(myCustomSource, preload: true);
-
-  // final stream = http.get(uri).asStream();
-
 
   player.setAudioSource(myCustomSource, preload: true);
-
-
-  // stream.doOnDone(() {
-  //   print("finished");
-
-  //   // final fullDecrypted = teste.events.single;
-  //   // streamController.add(fullDecrypted);
-    
-  //   // player.setAudioSource(myCustomSource, preload: true);
-
-  //   // player.play();
-
-  //   // // print("[Accumulator] - $fullEncrypted");
-
-
-  //   // enc.Encrypted en = enc.Encrypted(Uint8List.fromList(fullEncrypted));
-  //   // final decrypted =
-  //   //     MyEncrypt.myEncrypter.decryptBytes(en, iv: MyEncrypt.myIV);
-
-  //   // streamController.add(decrypted);
-
-  //   // player.setAudioSource(myCustomSource);
-  // }).doOnData((event) {
-  //   _received += event.length;
-
-  //   print("data: ${event.length}");
-
-  //   final decrypted = decrypt(event);
-  //   streamController.add(decrypted);
-
-  //   print("${(_received/_total)*100}% - ${[_received, _total]}");
-  // }).listen((event) {
-
-  //   // final list = event.buffer.asUint8List();
-  //   // final list = event.bodyBytes;
-
-  //   // final encrypted =
-  //   //     MyEncrypt.myEncrypter.encryptBytes(list, iv: MyEncrypt.myIV).bytes;
-  //   // final decrypted = decrypt(Uint8List.fromList(event));
-  //   // final encryptedBytes = base64Decode(event);
-  //   // final encrypted = encrypt(event.buffer.asUint8List());
-  //   // final decrypted = decrypt(encrypted);
-  //   // final decrypted = decrypt(event.buffer.asUint8List());
-  //   // final decrypted = decrypt(event);
-  //   // streamController.add(decrypted);
-  //   // streamController.add(event);
-  //   // streamController.add(event);
-  //   // final decrypted = decrypt(list);
-
-  //   // final encrypted = encrypt(event);
-  //   // final decrypted = decrypt(encrypted);
-
-  //   // teste.add(encrypted);
-  //   // teste.add(decrypted);
-  //   // bytesHandler(encrypted);
-
-  //   // print("${(_received/_total)*100}% - ${[_received, _total]}");
-  // });
-
-  // var firstChunk = utf8.encode("foo");
-  // var secondChunk = utf8.encode("bar");
-
-  // var output = AccumulatorSink<Digest>();
-
-  // teste.add(firstChunk);
-
-  // var input = sha1.startChunkedConversion(output);
-  // input.add(firstChunk);
-  // input.add(secondChunk); // call `add` for every chunk of input data
-  // input.close();
-  // var digest = output.events.single;
-
-  // print("Digest as bytes: ${digest.bytes}");
-  // print("Digest as hex string: $digest");
+  // player.pause();
 
   runApp(const MyApp());
-}
-
-void bytesHandler(List<int> bytes) {
-  // print("[bytesHandler] -> $bytes");
-}
-
-List<int> encrypt(List<int> bytes) {
-  return MyEncrypt.myEncrypter.encryptBytes(bytes, iv: MyEncrypt.myIV).bytes;
-}
-
-List<int> decrypt(List<int> encryptedBytes) {
-  // enc.Encrypted en = enc.Encrypted(Uint8List.fromList(encryptedBytes));
-  enc.Encrypted en = enc.Encrypted(Uint8List.fromList(encryptedBytes));
-  // final result = MyEncrypt.myEncrypter.decrypt(en, iv: MyEncrypt.myIV);
-  // return utf8.encode(result.toString());
-  // return Uint8List.fromList(result.codeUnits);
-  return MyEncrypt.myEncrypter.decryptBytes(en, iv: MyEncrypt.myIV);
 }
 
 class MyApp extends StatelessWidget {
@@ -399,40 +309,48 @@ class AudioPlayerHandler extends BaseAudioHandler with SeekHandler {
 
 class MyCustomSource extends StreamAudioSource {
   ///Controller for decrypted bytes stream.
-  late final StreamController<List<int>> _controller;
-  late final Stream<List<int>> _remoteStream;
+  late final StreamController<List<int>> _decryptionController;
+
+  ///Copy of [responseStream], but with "doOn" actions
+  late final Stream<List<int>> _originalStream;
   
+  ///Size of response's body 
   final int? sourceLength;
 
+  ///Accumulator for decrypted bytes. The [_decryptedBytesStream] is internally listened after a delay.
+  ///So, to workaround this behavior, the current accumulation will be immediately sent on first listen, and
+  ///then the next bytes will be added.
   final List<int> _decryptedBytes = [];
-  // final AccumulatorSink<List<int>> _accumulator = AccumulatorSink<List<int>>();
 
-  Stream<List<int>> get _decryptedBytesStream => _controller.stream;
+  Stream<List<int>> get _decryptedBytesStream => _decryptionController.stream;
 
+  ///Start position for decrypted addition.
+  ///Ex.: firstLength = 100, {startPosition: 0, endPosition: 99}, so next addition will be {startPosition: 100, endPosition: 200}
   int _decryptedStart = 0;
   
   MyCustomSource({
-    required Stream<List<int>> remoteStream,
+    required Stream<List<int>> responseStream,
     this.sourceLength
   }) {    
-    _remoteStream = remoteStream
+    _originalStream = responseStream
       .doOnData((bytes) {
-        final decrypted = decrypt(bytes);
+        final decrypted = MyEncrypt.decrypt(bytes);
         _decryptedBytes.addAll(decrypted);
       })
       .doOnDone(_closeStream)
       .doOnError((error, stackTrace) async {
-        print(error); print(stackTrace);
+        debugPrint(error.toString());
+        debugPrint(stackTrace.toString());
         await _closeStream();
       });
 
-    _controller = StreamController<List<int>>.broadcast(
+    _decryptionController = StreamController<List<int>>.broadcast(
       onListen: () {
         if (_decryptedBytes.isNotEmpty && _decryptedStart == 0) {
           _addOnController();
         }
 
-        _remoteStream.listen((bytes) {
+        _originalStream.listen((bytes) {
           _addOnController();
         });
       },
@@ -440,13 +358,14 @@ class MyCustomSource extends StreamAudioSource {
   }
 
   void _addOnController() {
-    _controller.add(_decryptedBytes.sublist(_decryptedStart));
+    _decryptionController.add(_decryptedBytes.sublist(_decryptedStart));
     _decryptedStart = _decryptedBytes.length;
   }
 
   Future<void> _closeStream() async {
     await Future<void>.delayed(const Duration(milliseconds: 3000));
-    _controller.close();
+    _decryptionController.close();
+    debugPrint("Decryption stream was closed");
   }
 
   @override
