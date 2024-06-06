@@ -101,10 +101,8 @@ Future<void> main() async {
   // return;
 
   final uri = Uri.parse(aesUrl);
-  // final uri = Uri.parse(url);
-  final client = http.Client();
   final request = http.Request('GET', uri);
-  final response = await client.send(request);
+  final response = await request.send();
   final stream = response.stream;
 
   final myCustomSource = MyCustomSource(
@@ -377,7 +375,8 @@ class MyCustomSource extends StreamAudioSource {
 
     return StreamAudioResponse(
       sourceLength: length,
-      contentLength: end - start,
+      // contentLength: end - start,
+      contentLength: -1,
       offset: start,
       stream: _decryptedBytesStream,
       contentType: 'audio/mpeg',
